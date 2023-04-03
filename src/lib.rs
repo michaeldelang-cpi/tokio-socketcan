@@ -21,7 +21,7 @@
 //!     let socket_tx = CANSocket::open("vcan0")?;
 //!
 //!     while let Some(Ok(frame)) = socket_rx.next().await {
-//!         socket_tx.write_frame(frame)?.await;
+//!         socket_tx.write_frame(frame.0)?.await;
 //!     }
 //!     Ok(())
 //! }
@@ -39,12 +39,11 @@ use futures::prelude::*;
 use futures::ready;
 use futures::task::Context;
 
-use mio::event::Evented;
-use mio::unix::EventedFd;
-use mio::{unix::UnixReady, PollOpt, Ready, Token};
+use mio::unix::SourceFd;
+use mio::{PollOpt, Ready, Token, Registry, event, Interest};
 
 use thiserror::Error as ThisError;
-use tokio::io::PollEvented;
+// use tokio::io::PollEvented;
 
 use socketcan;
 pub use socketcan::CANFrame;
@@ -90,29 +89,27 @@ impl EventedCANSocket {
     }
 }
 
-impl Evented for EventedCANSocket {
+impl event::Source for EventedCANSocket {
     fn register(
         &self,
-        poll: &mio::Poll,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        EventedFd(&self.0.as_raw_fd()).register(poll, token, interest, opts)
+        SourceFd(&self.0.as_raw_fd()).register(registry, token, interest, opts)
     }
 
     fn reregister(
         &self,
-        poll: &mio::Poll,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        EventedFd(&self.0.as_raw_fd()).reregister(poll, token, interest, opts)
+        SourceFd(&self.0.as_raw_fd()).reregister(registry, token, interest, opts)
     }
 
-    fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {
-        EventedFd(&self.0.as_raw_fd()).deregister(poll)
+    fn deregister(&self, registry: &Registry) -> io::Result<()> {
+        SourceFd(&self.0.as_raw_fd()).deregister(register)
     }
 }
 
@@ -229,7 +226,7 @@ impl Stream for CANSocket {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         ready!(self
             .0
-            .poll_read_ready(cx, Ready::readable() | UnixReady::error()))?;
+                .poll_read_ready(cx, Ready::readable() | UnixReady::error()))?;
         match self.0.get_ref().get_ref().read_frame() {
             Ok(frame) => {
                 let time = self.get_frame_time();
