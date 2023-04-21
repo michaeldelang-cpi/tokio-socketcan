@@ -32,6 +32,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::pin::Pin;
 use std::task::Poll;
 use std::{future::Future, os::unix::prelude::RawFd};
+use std::convert::TryFrom;
 
 use futures::prelude::*;
 use futures::ready;
@@ -201,7 +202,7 @@ impl CANSocket {
 
         let (rval, ts) = unsafe {
             let time = MaybeUninit::<libc::timespec>::uninit();
-            let ret = libc::ioctl(raw_fd, SIOCGSTAMP, time.as_ptr());
+            let ret = libc::ioctl(raw_fd, i32::try_from(SIOCGSTAMP).unwrap(), time.as_ptr());
             (ret, time.assume_init())
         };
 
